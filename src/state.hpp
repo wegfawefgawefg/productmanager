@@ -23,6 +23,9 @@ enum class Act {
     Done, // an agent that has finished
 };
 
+// which tool wrote the log
+enum class Kind { Claude, Codex };
+
 // one tool call or reply in an agent's history
 struct Tick {
     double at = 0;
@@ -33,6 +36,7 @@ struct Tick {
 
 // one log file being followed, leader or agent
 struct Tail {
+    Kind kind = Kind::Claude;
     std::string path;
     uint64_t first_window = 512 * 1024; // how much of an old log is read on open
     uint64_t offset = 0;
@@ -57,6 +61,8 @@ struct Tail {
     int64_t context_tokens = 0; // size of the latest request
     std::string last_message_id;
     int error_streak = 0; // tool calls failing in a row
+    std::string model; // when the log names it (Codex does)
+    std::string thread_id; // Codex: its thread, for finding generated images
 };
 
 struct Agent {
@@ -73,7 +79,8 @@ struct Agent {
 };
 
 struct Chat {
-    int pid = 0;
+    Kind kind = Kind::Claude;
+    int pid = 0; // Codex chats with no process found get a made-up negative id
     std::string session_id;
     std::string name;
     std::string status; // busy, idle, shell... from ~/.claude/sessions

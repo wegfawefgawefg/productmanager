@@ -8,6 +8,7 @@
 #include <ctime>
 
 #include "json.hpp"
+#include "codex_sessions.hpp"
 #include "transcript.hpp"
 
 using nlohmann::json;
@@ -58,7 +59,7 @@ static std::string find_project_dir(const std::string& home, const std::string& 
 
 static Chat* find_chat(State& state, int pid) {
     for (Chat& chat : state.chats) {
-        if (chat.pid == pid) {
+        if (chat.kind == Kind::Claude && chat.pid == pid) {
             return &chat;
         }
     }
@@ -189,6 +190,7 @@ void scan_sessions(State& state) {
             read_session_file(state, entry.path().string(), now);
         }
     }
+    scan_codex(state);
     std::erase_if(state.chats, [&](const Chat& c) { return c.seen_at != now; });
     std::sort(state.chats.begin(), state.chats.end(),
               [](const Chat& a, const Chat& b) { return a.name < b.name; });
@@ -224,9 +226,14 @@ void poll_all_tails(State& state) {
             continue;
         }
         poll_tail(chat.tail, state.now);
-        settle_leader(chat, state.now);
         for (Agent& agent : chat.agents) {
             poll_tail(agent.tail, state.now);
+        }
+        if (chat.kind == Kind::Codex) {
+            settle_codex(chat, state.now);
+        }
+        settle_leader(chat, state.now);
+        for (Agent& agent : chat.agents) {
             if (agent.finished) {
                 agent.tail.act = Act::Done;
                 agent.tail.detail = agent.model;

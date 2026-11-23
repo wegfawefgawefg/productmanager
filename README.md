@@ -1,7 +1,7 @@
 # productmanager
 
 A heads-up display for AI coding agents. It watches every running Claude Code
-chat and the subagents each one launches, and shows what each is doing right
+and Codex chat and the subagents each one launches, and shows what each is doing right
 now: reading, searching, editing, building, running, looking at an image,
 waiting on you. It does nothing itself and costs no tokens. It only reads the
 logs the agents already write.
@@ -88,7 +88,22 @@ each log, four times a second. Everything it reads is already in the page
 cache, and it writes nothing to disk; viewers register themselves in
 `$XDG_RUNTIME_DIR/productmanager`.
 
-Other agents (Codex, Antigravity, Hermes and more) are planned; see
+## How it reads Codex
+
+- `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`: one log per thread, written
+  live. Its first line names the thread's folder, and for a subagent, its
+  parent thread, nickname and task. Subagents become agent tiles under their
+  parent.
+- `~/.codex/session_index.jsonl`: thread titles, used as the chat's name.
+- `~/.codex/generated_images/<thread>/`: images Codex generates, shown on the
+  tile that made them.
+
+Codex keeps no "this chat is running" file, so a thread counts as live while
+a `codex` process runs in its folder (which is also how clicking jumps to its
+terminal), or while its log was written in the last half hour. A thread is
+working while its turn is open, and waiting on you once its task completes.
+
+Other agents (Antigravity, Hermes and more) are planned; see
 [docs/todo.md](docs/todo.md).
 
 ## Check the look without a display

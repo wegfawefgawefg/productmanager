@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 
 #include "json.hpp"
+#include "transcript_parts.hpp"
 
 using nlohmann::json;
 namespace fs = std::filesystem;
@@ -50,7 +51,7 @@ const char* act_name(Act act) {
     return "?";
 }
 
-static std::string base_name(const std::string& path) {
+std::string base_name(const std::string& path) {
     size_t slash = path.find_last_of('/');
     if (slash == std::string::npos) {
         return path;
@@ -63,13 +64,13 @@ static std::string lower(std::string s) {
     return s;
 }
 
-static bool is_image_path(const std::string& path) {
+bool is_image_path(const std::string& path) {
     std::string ext = lower(fs::path(path).extension().string());
     return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" ||
            ext == ".bmp";
 }
 
-static std::string str_field(const json& obj, const char* key) {
+std::string str_field(const json& obj, const char* key) {
     if (!obj.is_object()) {
         return "";
     }
@@ -80,7 +81,7 @@ static std::string str_field(const json& obj, const char* key) {
     return it->get<std::string>();
 }
 
-static std::string first_line(const std::string& s, size_t max_len) {
+std::string first_line(const std::string& s, size_t max_len) {
     std::string out = s.substr(0, s.find('\n'));
     if (out.size() > max_len) {
         out = out.substr(0, max_len);
@@ -88,7 +89,7 @@ static std::string first_line(const std::string& s, size_t max_len) {
     return out;
 }
 
-static bool looks_like_build(const std::string& cmd) {
+bool looks_like_build(const std::string& cmd) {
     const char* words[] = {"cmake", "ninja", "make ", "make\n", "cargo build", "cargo run",
                            "g++",   "clang", "meson", "cargo test", "cc65", "tisple "};
     for (const char* w : words) {
@@ -171,7 +172,7 @@ static Act classify_tool(const std::string& name, const json& input, std::string
     return Act::Thinking;
 }
 
-static void set_act(Tail& tail, Act act, const std::string& detail, double now) {
+void set_act(Tail& tail, Act act, const std::string& detail, double now) {
     if (tail.act != act || tail.detail != detail) {
         tail.act_since = now;
     }
@@ -179,7 +180,7 @@ static void set_act(Tail& tail, Act act, const std::string& detail, double now) 
     tail.detail = detail;
 }
 
-static void add_tick(Tail& tail, Act act, const std::string& detail, double now) {
+void add_tick(Tail& tail, Act act, const std::string& detail, double now) {
     if (tail.ticks.size() >= max_ticks) {
         tail.ticks.erase(tail.ticks.begin(), tail.ticks.begin() + max_ticks / 4);
     }
@@ -187,7 +188,7 @@ static void add_tick(Tail& tail, Act act, const std::string& detail, double now)
 }
 
 // squash whitespace so a remark reads as one line of prose
-static std::string one_line(const std::string& text) {
+std::string one_line(const std::string& text) {
     std::string out;
     bool space = false;
     for (char c : text) {
@@ -281,7 +282,7 @@ static void read_user(Tail& tail, const json& msg, double now) {
 }
 
 // "2026-11-23T01:02:03.456Z" to unix seconds; 0 when it doesn't parse
-static double parse_timestamp(const std::string& text) {
+double parse_timestamp(const std::string& text) {
     struct tm tm = {};
     int millis = 0;
     if (sscanf(text.c_str(), "%d-%d-%dT%d:%d:%d.%dZ", &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
@@ -294,6 +295,10 @@ static double parse_timestamp(const std::string& text) {
 }
 
 static void read_line(Tail& tail, const std::string& line, double when) {
+    if (tail.kind == Kind::Codex) {
+        read_codex_line(tail, line, when);
+        return;
+    }
     // skip the bookkeeping lines cheaply; they are most of the file
     if (line.find("\"type\":\"assistant\"") == std::string::npos &&
         line.find("\"type\":\"user\"") == std::string::npos) {

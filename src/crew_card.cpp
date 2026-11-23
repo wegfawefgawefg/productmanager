@@ -270,7 +270,8 @@ void draw_leader_card(SDL_Renderer* r, const CrewFonts& fonts, const Chat& chat,
     draw_text(r, fonts.title, x + m, cy, fit_text(fonts.title, name, inner - counts_w - 10),
               text_main);
     cy += line_h(fonts.title);
-    std::string where = chat.cwd + "   " + tokens_text(tail.context_tokens) + " ctx";
+    std::string where = (chat.kind == Kind::Codex ? "codex   " : "") + chat.cwd + "   " +
+                        tokens_text(tail.context_tokens) + " ctx";
     draw_text(r, fonts.tiny, x + m, cy, fit_text(fonts.tiny, where, inner), text_dim);
     cy += line_h(fonts.tiny) + 4;
 

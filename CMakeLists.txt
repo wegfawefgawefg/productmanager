@@ -26,7 +26,7 @@ endif()
 
 add_executable(productmanager
     src/main.cpp src/paths.cpp src/strip_app.cpp src/view_app.cpp src/views.cpp src/wm.cpp
-    src/sessions.cpp src/transcript.cpp src/focus.cpp
+    src/sessions.cpp src/transcript.cpp src/transcript_codex.cpp src/codex_sessions.cpp src/focus.cpp
     src/tiles.cpp src/big_view.cpp src/crew_card.cpp src/tile_layout.cpp
     src/icons.cpp src/shapes.cpp src/text.cpp src/thumbs.cpp src/capture.cpp)
 target_compile_features(productmanager PRIVATE cxx_std_20)

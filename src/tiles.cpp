@@ -185,7 +185,7 @@ static void draw_leader(SDL_Renderer* r, State& state, const Fonts& fonts, const
     draw_text(r, fonts.small, tx, y + 24, fit_text(fonts.small, act_line(tail), text_w),
               act_ink(tail.act));
     std::string folder = chat.cwd.substr(chat.cwd.find_last_of('/') + 1);
-    std::string sub = folder;
+    std::string sub = chat.kind == Kind::Codex ? "codex  " + folder : folder;
     int shown = strip_agent_count(chat, state.now);
     if (shown > 0) {
         sub += "   " + std::to_string(shown) + " agent" + (shown == 1 ? "" : "s");

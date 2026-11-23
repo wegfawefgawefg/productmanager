@@ -2,18 +2,19 @@
 
 ## More agents
 
-Today productmanager only understands Claude Code. The Claude-specific part is
-small: `src/sessions.cpp` (which chats are running, which agents they have)
-and `src/transcript.cpp` (what a log line means). Everything after that
+productmanager understands Claude Code and Codex. Each agent's part is small:
+`src/sessions.cpp` + `src/transcript.cpp` for Claude Code, and
+`src/codex_sessions.cpp` + `src/transcript_codex.cpp` for Codex (which chats
+are running, which agents they have, and what a log line means). Everything after that
 (tiles, layout, viewers, the strip) works on plain chats, agents and
 activities. Each new agent gets its own reader that fills the same structures,
 and tiles show which kind of agent a chat is.
 
 Planned:
 
-- **Codex** (OpenAI's Codex CLI). Sessions are JSONL rollouts under
-  `~/.codex/sessions/`. Map its shell, apply-patch and read events onto the
-  same activities. Find out how to tell a live session from a finished one.
+- **Codex**: done. Still to do: show what a code-mode `exec` script runs when
+  it calls several tools at once (only the first is shown), and let a finished
+  subagent's generated image stay visible on the leader tile.
 - **Antigravity** (Google). Agent manager with several agents per workspace.
   Find where it keeps agent state and logs, and whether its browser agent's
   screenshots can show up like images do now.
