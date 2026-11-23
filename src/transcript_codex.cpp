@@ -58,7 +58,7 @@ static void read_command(Tail& tail, const json& item, double when) {
             detail = name;
         }
     }
-    bool failed = item.value("exit_code", 0) != 0;
+    bool failed = (int)num_field(item, "exit_code", 0) != 0;
     finish_tick(tail, command_act(kind, cmd), detail, failed, when);
 }
 
@@ -180,10 +180,10 @@ static void read_tokens(Tail& tail, const json& info) {
         return;
     }
     if (info.contains("total_token_usage")) {
-        tail.output_tokens = info["total_token_usage"].value("output_tokens", (int64_t)0);
+        tail.output_tokens = num_field(info["total_token_usage"], "output_tokens", 0);
     }
     if (info.contains("last_token_usage")) {
-        tail.context_tokens = info["last_token_usage"].value("input_tokens", (int64_t)0);
+        tail.context_tokens = num_field(info["last_token_usage"], "input_tokens", 0);
     }
 }
 

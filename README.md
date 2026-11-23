@@ -42,15 +42,32 @@ the agents that finished in the last hour.
 ## Use
 
     productmanager            show the strip, or hide it when it is showing
-    productmanager start      show the strip unless it already runs (for login)
-    productmanager stop       close the strip and every viewer
+    productmanager start      start the strip and the phone page unless they run (for login)
+    productmanager stop       close the strip, every viewer and the phone page
     productmanager big        open a viewer for the chats on this workspace
     productmanager big NAME   open a viewer for one chat
+    productmanager serve      start only the phone page
 
 `pm` is the same program under a short name. On the strip, each working chat
 has a small `+` button that opens a viewer for it (the viewer moves itself to
 the workspace where that chat's terminal is) and turns into `x` to close it.
 Clicking a tile in a viewer jumps to that chat.
+
+## On your phone
+
+`productmanager serve` (also started by `start`) runs a small read-only web
+page on `127.0.0.1:8651`: the chats, "your turn" ones first, and for each chat
+its leader and agents as full-width tiles that refresh every second. Each
+Claude chat that has Remote Control on gets an "open" button that goes to
+`https://claude.ai/code/<session>`, where you can type to it.
+
+It only listens on localhost. To reach it from a phone, publish it on your
+Tailscale tailnet over HTTPS:
+
+    tailscale serve --bg --https=8443 http://127.0.0.1:8651
+
+then open `https://<machine>.<tailnet>.ts.net:8443/` on the phone and use the
+browser's "Add to Home screen" / "Install app" to get a full-screen app icon.
 
 ## Build and install
 

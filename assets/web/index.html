@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>productmanager</title>
+<style>
+  :root { --bg: #000; --hover: #181818; --text: #fff; --body: #ddd; --dim: #999;
+          --line: #555; --faint: #333; --warn: #ffaa28; --fail: #ff4646; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+               font: 14px/1.35 "DejaVu Sans Mono", ui-monospace, monospace; }
+  body { padding: 10px 10px 40px; padding-top: max(10px, env(safe-area-inset-top)); }
+  a { color: inherit; }
+  .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar h1 { font-size: 18px; margin: 0; flex: 1; letter-spacing: 1px; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+  .btn { border: 1px solid var(--text); padding: 6px 10px; text-decoration: none;
+         background: var(--bg); color: var(--text); font: inherit; white-space: nowrap; }
+  .btn:active { background: var(--text); color: var(--bg); }
+  .dim { color: var(--dim); }
+  .box { border: 1px solid var(--line); padding: 10px; margin-bottom: 8px; display: block;
+         text-decoration: none; }
+  .box:active { background: var(--hover); border-color: var(--text); }
+  .row { display: flex; justify-content: space-between; gap: 8px; }
+  .name { font-weight: bold; text-transform: uppercase; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+  .ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .turn { border-color: var(--text); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 50% { border-color: var(--faint); } }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { border: 1px solid var(--line); padding: 4px 8px; color: var(--dim);
+          text-decoration: none; }
+  .act { font-size: 17px; font-weight: bold; margin-top: 6px; }
+  .tile { border: 1px solid var(--line); padding: 10px; margin-bottom: 8px; }
+  .tile.trouble { border-color: var(--warn); }
+  .badge { background: var(--warn); color: #000; padding: 0 6px; }
+  .shot { display: block; width: 100%; margin: 8px 0; border: 1px solid var(--line); }
+  .thumb { float: right; width: 30%; margin: 0 0 6px 8px; opacity: .6;
+           border: 1px solid var(--line); }
+  .feed { margin: 8px 0 0; padding: 6px 0 0; border-top: 1px solid var(--faint);
+          list-style: none; font-size: 12px; }
+  .feed li { display: flex; gap: 6px; }
+  .feed .sq { width: 9px; height: 9px; margin-top: 4px; flex: none; }
+  .feed .what { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .remark { margin-top: 8px; color: var(--body); }
+  .barcode { position: relative; height: 10px; margin-top: 8px; background: #101010;
+             overflow: hidden; }
+  .barcode span { position: absolute; top: 0; bottom: 0; }
+  .barcode .f { height: 3px; bottom: auto; background: var(--fail); }
+  .done { font-size: 12px; margin-top: 4px; }
+  .small { font-size: 12px; }
+  .empty { color: var(--dim); padding: 20px 0; }
+</style>
+</head>
+<body>
+<div id="app" class="empty">loading...</div>
+<script>
+// one entry per activity, in the order of the program's Act enum
+const ACTS = [
+  ["thinking", "#6e6e6e"], ["reading", "#6e96be"], ["searching", "#64aaaa"],
+  ["editing", "#82b478"], ["running", "#c88c5a"], ["building", "#c8af5a"],
+  ["looking", "#be78a0"], ["web", "#5aaa96"], ["spawning", "#a08cbe"],
+  ["messaging", "#8ca0be"], ["publishing", "#a0b464"], ["waiting", "#464646"],
+  ["your turn", "#ffffff"], ["idle", "#333333"], ["done", "#555555"],
+];
+const NEEDS_YOU = 12, IDLE = 13;
+
+let data = null;
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+}
+function ago(seconds) {
+  const s = Math.max(0, Math.abs(seconds));
+  if (s < 60) return Math.floor(s) + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  if (s < 86400) return Math.floor(s / 3600) + "h";
+  return Math.floor(s / 86400) + "d";
+}
+function tokens(n) {
+  if (n < 1000) return String(n);
+  if (n < 1e6) return Math.round(n / 1000) + "k";
+  return (n / 1e6).toFixed(1) + "M";
+}
+function actLine(t) {
+  const name = ACTS[t.act] ? ACTS[t.act][0] : "?";
+  return t.detail ? name + ": " + t.detail : name;
+}
+function rank(c) {
+  if (c.act === NEEDS_YOU) return 0;
+  if (c.act !== IDLE || c.agents.some(a => !a.finished)) return 1;
+  return 2;
+}
+
+// the whole life of a tile as colored stripes, red marks on failed calls
+function barcode(t, endAt) {
+  if (!t.ticks.length) return '<div class="barcode"></div>';
+  const t0 = Math.min(t.started || t.ticks[0][0], t.ticks[0][0]);
+  const t1 = endAt;
+  const span = Math.max(1, t1 - t0);
+  let html = "";
+  t.ticks.forEach((k, i) => {
+    const end = i + 1 < t.ticks.length ? t.ticks[i + 1][0] : t1;
+    const left = (k[0] - t0) / span * 100;
+    const width = Math.max(0.4, (end - k[0]) / span * 100);
+    const color = ACTS[k[1]] ? ACTS[k[1]][1] : "#666";
+    html += `<span style="left:${left}%;width:${width}%;background:${color}"></span>`;
+    if (k[2]) html += `<span class="f" style="left:${left}%;width:${Math.max(0.6, width)}%"></span>`;
+  });
+  return `<div class="barcode">${html}</div>`;
+}
+
+function feed(t) {
+  const rows = t.ticks.slice(0, -1).slice(-6).reverse().map(k => {
+    const color = ACTS[k[1]] ? ACTS[k[1]][1] : "#666";
+    const fail = k[2] ? ' style="outline:2px solid var(--fail)"' : "";
+    return `<li><span class="sq" style="background:${color}"${fail}></span>` +
+      `<span class="what">${esc(ACTS[k[1]] ? ACTS[k[1]][0] : "")}  ${esc(k[3])}</span>` +
+      `<span class="dim">${ago(k[0])}</span></li>`;
+  }).join("");
+  return rows ? `<ul class="feed">${rows}</ul>` : "";
+}
+
+function image(t, chatPid, agentId) {
+  if (!t.image) return "";
+  const src = `image?chat=${chatPid}&agent=${encodeURIComponent(agentId || "")}&k=${t.image_key}`;
+  return t.image_fresh
+    ? `<img class="shot" src="${src}" alt="${esc(t.image_name)}">`
+    : `<img class="thumb" src="${src}" alt="${esc(t.image_name)}">`;
+}
+
+function agentTile(c, a) {
+  const meta = [a.model, a.type, tokens(a.out) + " out", tokens(a.ctx) + " ctx", a.calls + " calls"]
+    .filter(Boolean).join("  ");
+  return `<div class="tile${a.trouble ? " trouble" : ""}">
+    <div class="row"><span class="name" style="text-transform:none">${esc(a.name)}</span>
+      <span class="dim">${ago(a.started)}</span></div>
+    <div class="dim small ellip">${esc(meta)}</div>
+    ${a.parent ? `<div class="dim small ellip">under ${esc(a.parent)}</div>` : ""}
+    ${image(a, c.pid, a.id)}
+    <div class="act">${esc(ACTS[a.act] ? ACTS[a.act][0] : "")} <span class="dim small">${ago(a.since)}</span></div>
+    <div class="ellip">${esc(a.detail)}</div>
+    ${feed(a)}
+    ${a.remark ? `<div class="remark">${esc(a.remark)}</div>` : ""}
+    ${a.trouble ? `<div style="margin-top:6px"><span class="badge">${esc(a.trouble)}</span></div>` : ""}
+    ${barcode(a, 0)}
+  </div>`;
+}
+
+function doneLine(a) {
+  const ran = Math.max(0, a.last_line - a.started);
+  return `<div class="done row"><span class="ellip">&#10003; ${esc(a.name)}</span>
+    <span class="dim">ran ${ago(ran)}, done ${ago(a.finished_ago)} ago</span></div>
+    ${barcode(a, a.last_line)}`;
+}
+
+function chatView(c) {
+  const live = c.agents.filter(a => !a.finished);
+  const done = c.agents.filter(a => a.finished).sort((x, y) => x.finished_ago - y.finished_ago);
+  const open = c.open_url ? `<a class="btn" href="${esc(c.open_url)}">open in Claude</a>` : "";
+  return `<div class="bar"><a class="btn" href="#">&lt;</a><h1>${esc(c.name)}</h1>${open}</div>
+    <div class="tile${c.act === NEEDS_YOU ? " turn" : ""}">
+      <div class="row"><span class="dim small">${esc(c.kind)}  ${esc(c.folder)}</span>
+        <span class="dim small">${live.length} working, ${done.length} done</span></div>
+      ${image(c, c.pid, "")}
+      <div class="act">${esc(actLine(c))} <span class="dim small">${ago(c.since)}</span></div>
+      ${c.remark ? `<div class="remark">${esc(c.remark)}</div>` : ""}
+      ${barcode(c, 0)}
+      ${done.length ? `<div class="dim small" style="margin-top:8px">finished</div>` + done.map(doneLine).join("") : ""}
+    </div>
+    ${live.map(a => agentTile(c, a)).join("")}`;
+}
+
+function listView() {
+  const chats = data.chats.slice().sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const active = chats.filter(c => rank(c) < 2);
+  const quiet = chats.filter(c => rank(c) === 2);
+  const working = data.chats.filter(c => rank(c) === 1).length;
+  const rows = active.map(c => {
+    const live = c.agents.filter(a => !a.finished).length;
+    // the row opens the chat's tiles; its button opens the chat itself in Claude
+    const open = c.open_url ? `<a class="btn small" href="${esc(c.open_url)}">open</a>` : "";
+    return `<div class="box${c.act === NEEDS_YOU ? " turn" : ""}">
+      <a href="#chat=${c.pid}" style="text-decoration:none;display:block">
+      <div class="row"><span class="name">${esc(c.name)}</span><span class="dim">${ago(c.since)}</span></div>
+      <div class="ellip">${esc(actLine(c))}</div></a>
+      <div class="row" style="align-items:center;margin-top:4px">
+        <span class="dim small">${esc(c.kind)}  ${esc(c.folder)}${live ? "  " + live + " agent" + (live > 1 ? "s" : "") : ""}</span>${open}</div>
+    </div>`;
+  }).join("");
+  const chips = quiet.map(c => `<a class="chip" href="#chat=${c.pid}">${esc(c.name)}</a>`).join("");
+  return `<div class="bar"><h1>PRODUCTMANAGER</h1><span class="dim small">${working} working</span></div>
+    ${rows || '<div class="empty">nothing working</div>'}
+    ${chips ? `<div class="chips">${chips}</div>` : ""}`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  if (!data) return;
+  app.className = "";
+  const m = location.hash.match(/chat=(-?\d+)/);
+  const chat = m && data.chats.find(c => String(c.pid) === m[1]);
+  app.innerHTML = chat ? chatView(chat) : m ? '<div class="bar"><a class="btn" href="#">&lt;</a><h1>that chat has closed</h1></div>' : listView();
+  document.title = chat ? chat.name + " - pm" : "productmanager";
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("state.json", {cache: "no-store"});
+    data = await r.json();
+    render();
+  } catch (e) {
+    document.getElementById("app").innerHTML = '<div class="empty">no connection to the desktop</div>';
+  }
+}
+
+window.addEventListener("hashchange", render);
+refresh();
+setInterval(() => { if (!document.hidden) refresh(); }, 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>

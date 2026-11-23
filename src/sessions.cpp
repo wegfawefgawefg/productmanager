@@ -8,6 +8,7 @@
 #include <ctime>
 
 #include "json.hpp"
+#include "transcript_parts.hpp"
 #include "codex_sessions.hpp"
 #include "transcript.hpp"
 
@@ -80,17 +81,17 @@ static void read_agent_meta(Agent& agent, const std::string& meta_path, double n
     if (!meta.is_object()) {
         return;
     }
-    agent.description = meta.value("description", agent.description);
-    agent.model = meta.value("model", agent.model);
-    agent.type = meta.value("agentType", agent.type);
+    agent.description = str_or(meta, "description", agent.description);
+    agent.model = str_or(meta, "model", agent.model);
+    agent.type = str_or(meta, "agentType", agent.type);
     // meta names the parent without the "agent-" its file name (our id) carries
-    std::string parent = meta.value("parentAgentId", "");
+    std::string parent = str_field(meta, "parentAgentId");
     if (!parent.empty()) {
         agent.parent_id = "agent-" + parent;
     }
-    agent.depth = meta.value("spawnDepth", agent.depth);
+    agent.depth = (int)num_field(meta, "spawnDepth", agent.depth);
     // once finished (or given up on as stale) an agent stays finished
-    if (meta.value("finished", false) && !agent.finished) {
+    if (bool_field(meta, "finished", false) && !agent.finished) {
         agent.finished = true;
         agent.finished_at = now;
     }
@@ -150,7 +151,7 @@ static void read_session_file(State& state, const std::string& path, double now)
     if (!info.is_object()) {
         return;
     }
-    int pid = info.value("pid", 0);
+    int pid = (int)num_field(info, "pid", 0);
     if (pid <= 0 || !pid_is_claude(pid)) {
         return;
     }
@@ -160,7 +161,7 @@ static void read_session_file(State& state, const std::string& path, double now)
         chat = &state.chats.back();
         chat->pid = pid;
     }
-    std::string session_id = info.value("sessionId", "");
+    std::string session_id = str_field(info, "sessionId");
     if (session_id != chat->session_id) {
         // new chat in this process (/clear or /resume): start over
         chat->session_id = session_id;
@@ -172,10 +173,11 @@ static void read_session_file(State& state, const std::string& path, double now)
         chat->project_dir = find_project_dir(state.home, session_id);
         chat->tail.path = chat->project_dir + "/" + session_id + ".jsonl";
     }
-    chat->name = info.value("name", "");
-    chat->status = info.value("status", "");
-    chat->cwd = info.value("cwd", "");
-    chat->tmux = info.value("tmux", "");
+    chat->name = str_field(info, "name");
+    chat->status = str_field(info, "status");
+    chat->cwd = str_field(info, "cwd");
+    chat->tmux = str_field(info, "tmux");
+    chat->remote_id = str_field(info, "bridgeSessionId");
     chat->seen_at = now;
     if (!chat->project_dir.empty()) {
         scan_agents(*chat, now);

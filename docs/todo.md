@@ -24,6 +24,12 @@ Planned:
 For each one: where the logs live, how to tell a running chat from a closed
 one, how subagents are recorded, and how to jump to the terminal it runs in.
 
+## Phone
+
+- Push a notification when a chat turns to "your turn".
+- Check whether the Claude app opens `claude.ai/code/<session>` links itself,
+  and how to do the same for Codex chats.
+
 ## Display
 
 - Redraw only when something changed, so an idle strip costs nearly nothing.

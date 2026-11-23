@@ -87,6 +87,7 @@ struct Chat {
     std::string status; // busy, idle, shell... from ~/.claude/sessions
     std::string cwd;
     std::string tmux; // "session:@win.%pane" when Claude knows it
+    std::string remote_id; // Claude Remote Control session ("session_..."), when on
     std::string project_dir; // ~/.claude/projects/<folder>
     double seen_at = 0.0;
     Tail tail;

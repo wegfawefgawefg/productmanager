@@ -81,6 +81,36 @@ std::string str_field(const json& obj, const char* key) {
     return it->get<std::string>();
 }
 
+std::string str_or(const json& obj, const char* key, const std::string& fallback) {
+    std::string v = str_field(obj, key);
+    return v.empty() ? fallback : v;
+}
+
+int64_t num_field(const json& obj, const char* key, int64_t fallback) {
+    if (!obj.is_object()) {
+        return fallback;
+    }
+    auto it = obj.find(key);
+    return it != obj.end() && it->is_number() ? it->get<int64_t>() : fallback;
+}
+
+bool bool_field(const json& obj, const char* key, bool fallback) {
+    if (!obj.is_object()) {
+        return fallback;
+    }
+    auto it = obj.find(key);
+    return it != obj.end() && it->is_boolean() ? it->get<bool>() : fallback;
+}
+
+const json& field(const json& obj, const char* key) {
+    static const json missing;
+    if (!obj.is_object()) {
+        return missing;
+    }
+    auto it = obj.find(key);
+    return it == obj.end() ? missing : *it;
+}
+
 std::string first_line(const std::string& s, size_t max_len) {
     std::string out = s.substr(0, s.find('\n'));
     if (out.size() > max_len) {
@@ -217,14 +247,14 @@ static void read_usage(Tail& tail, const json& msg) {
     }
     // one reply is split over several lines that repeat its usage
     tail.last_message_id = id;
-    tail.output_tokens += usage.value("output_tokens", (int64_t)0);
-    tail.context_tokens = usage.value("input_tokens", (int64_t)0) +
-                          usage.value("cache_read_input_tokens", (int64_t)0) +
-                          usage.value("cache_creation_input_tokens", (int64_t)0);
+    tail.output_tokens += num_field(usage, "output_tokens", 0);
+    tail.context_tokens = num_field(usage, "input_tokens", 0) +
+                          num_field(usage, "cache_read_input_tokens", 0) +
+                          num_field(usage, "cache_creation_input_tokens", 0);
 }
 
 static void read_assistant(Tail& tail, const json& msg, double now) {
-    const json& content = msg["content"];
+    const json& content = field(msg, "content");
     if (!content.is_array()) {
         return;
     }
@@ -233,9 +263,9 @@ static void read_assistant(Tail& tail, const json& msg, double now) {
         if (type == "tool_use") {
             std::string detail;
             std::string image;
-            Act act = classify_tool(str_field(block, "name"), block["input"], detail, image);
+            Act act = classify_tool(str_field(block, "name"), field(block, "input"), detail, image);
             set_act(tail, act, detail, now);
-            tail.edit_path = act == Act::Editing ? str_field(block["input"], "file_path") : "";
+            tail.edit_path = act == Act::Editing ? str_field(field(block, "input"), "file_path") : "";
             add_tick(tail, act, detail, now);
             tail.tools_used++;
             if (!image.empty()) {
@@ -258,7 +288,7 @@ static void read_assistant(Tail& tail, const json& msg, double now) {
 }
 
 static void read_user(Tail& tail, const json& msg, double now) {
-    const json& content = msg["content"];
+    const json& content = field(msg, "content");
     tail.turn_over = false;
     if (content.is_string()) {
         set_act(tail, Act::Thinking, "new prompt", now);
@@ -269,7 +299,7 @@ static void read_user(Tail& tail, const json& msg, double now) {
     }
     for (const json& block : content) {
         if (str_field(block, "type") == "tool_result") {
-            bool failed = block.value("is_error", false);
+            bool failed = bool_field(block, "is_error", false);
             tail.error_streak = failed ? tail.error_streak + 1 : 0;
             if (failed && !tail.ticks.empty()) {
                 tail.ticks.back().failed = true;
@@ -317,9 +347,9 @@ static void read_line(Tail& tail, const std::string& line, double when) {
     }
     std::string type = str_field(row, "type");
     if (type == "assistant") {
-        read_assistant(tail, row["message"], when);
-    } else if (type == "user" && !row.value("isMeta", false)) {
-        read_user(tail, row["message"], when);
+        read_assistant(tail, field(row, "message"), when);
+    } else if (type == "user" && !bool_field(row, "isMeta", false)) {
+        read_user(tail, field(row, "message"), when);
     } else {
         return;
     }

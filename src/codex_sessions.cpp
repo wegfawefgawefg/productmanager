@@ -70,11 +70,12 @@ static bool read_header(const std::string& path, ThreadInfo& out) {
     out.started_at = parse_timestamp(str_field(row, "timestamp"));
     const json& source = meta.contains("source") ? meta["source"] : json();
     if (source.is_object() && source.contains("subagent")) {
-        const json& spawn = source["subagent"].value("thread_spawn", json::object());
+        const json& sub = source["subagent"];
+        json spawn = sub.is_object() && sub.contains("thread_spawn") ? sub["thread_spawn"] : json::object();
         out.parent_id = str_field(spawn, "parent_thread_id");
         out.nickname = str_field(spawn, "agent_nickname");
         out.task = base_name(str_field(spawn, "agent_path"));
-        out.depth = spawn.value("depth", 1);
+        out.depth = (int)num_field(spawn, "depth", 1);
     }
     return !out.id.empty();
 }

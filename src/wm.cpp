@@ -2,14 +2,15 @@
 
 #include "focus.hpp"
 #include "json.hpp"
+#include "transcript_parts.hpp"
 
 using nlohmann::json;
 
 static void walk(const json& node, const std::string& workspace,
                  std::map<long, std::string>& out) {
     std::string here = workspace;
-    if (node.value("type", "") == "workspace") {
-        here = node.value("name", "");
+    if (str_field(node, "type") == "workspace") {
+        here = str_field(node, "name");
     }
     auto win = node.find("window");
     if (win != node.end() && win->is_number_integer() && !here.empty()) {

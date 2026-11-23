@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "json.hpp"
+#include "transcript_parts.hpp"
 #include "paths.hpp"
 
 using nlohmann::json;
@@ -46,10 +47,14 @@ std::vector<ViewInfo> read_views() {
             continue;
         }
         ViewInfo view;
-        view.pid = info.value("pid", 0);
-        view.pinned = info.value("pinned", 0);
+        view.pid = (int)num_field(info, "pid", 0);
+        view.pinned = (int)num_field(info, "pinned", 0);
         if (info.contains("shows") && info["shows"].is_array()) {
-            view.shows = info["shows"].get<std::vector<int>>();
+            for (const auto& shown : info["shows"]) {
+                if (shown.is_number_integer()) {
+                    view.shows.push_back(shown.get<int>());
+                }
+            }
         }
         if (view.pid > 0 && is_ours(view.pid)) {
             views.push_back(view);
