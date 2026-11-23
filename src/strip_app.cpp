@@ -133,13 +133,13 @@ static void place_window(SDL_Window* window, const State& state) {
     SDL_SetWindowPosition(window, x, y);
 }
 
-// later size changes keep the window's top-right corner where it is now
+// later size changes keep the top-right corner where the window really is
 // (where it was placed, or wherever it was dragged to), growing left and down
-static void resize_in_place(SDL_Window* window, int old_w, const State& state) {
-    int x, y;
-    SDL_GetWindowPosition(window, &x, &y);
+static void resize_in_place(SDL_Window* window, const State& state) {
     SDL_SetWindowSize(window, state.win_w, state.win_h);
-    SDL_SetWindowPosition(window, x + old_w - state.win_w, y);
+    if (state.anchor_right >= 0) {
+        SDL_SetWindowPosition(window, state.anchor_right - state.win_w, state.anchor_top);
+    }
 }
 
 int run_strip(int argc, char** argv) {
@@ -196,6 +196,10 @@ int run_strip(int argc, char** argv) {
             } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
                 state.mouse_x = event.motion.x;
                 state.mouse_y = event.motion.y;
+            } else if (event.type == SDL_EVENT_WINDOW_MOVED) {
+                // where the window system put it, with the width we asked for
+                state.anchor_right = event.window.data1 + state.win_w;
+                state.anchor_top = event.window.data2;
             } else if (event.type == SDL_EVENT_WINDOW_MOUSE_LEAVE) {
                 state.mouse_x = -1;
                 state.mouse_y = -1;
@@ -231,7 +235,7 @@ int run_strip(int argc, char** argv) {
         if (frames == 1) {
             place_window(window, state);
         } else if (state.win_w != old_w || state.win_h != old_h) {
-            resize_in_place(window, old_w, state);
+            resize_in_place(window, state);
         }
         SDL_Delay(40);
     }

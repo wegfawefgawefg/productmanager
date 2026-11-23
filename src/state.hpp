@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -91,6 +92,7 @@ struct Chat {
     Tail tail;
     std::vector<Agent> agents;
     bool crew_open = false; // the big window shows this chat; keep finished agents longer
+    std::set<std::string> retired; // Codex agents already shown finished and dropped
 };
 
 // a big viewer window, as the strip sees it
@@ -121,6 +123,10 @@ struct State {
     // window
     int win_w = 300;
     int win_h = 100;
+    // the strip's top-right corner, from where the window really is (moves
+    // reported by the window system, ours or the user's drags)
+    int anchor_right = -1;
+    int anchor_top = -1;
     float mouse_x = -1, mouse_y = -1;
     int corner = 1; // 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left
 };

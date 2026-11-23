@@ -255,6 +255,9 @@ static void update_agent(State& state, const std::string& path, const ThreadInfo
             agent = &a;
         }
     }
+    if (!agent && chat->retired.count(info.id)) {
+        return; // finished and already shown; its log alone must not bring it back
+    }
     if (!agent) {
         Agent fresh;
         fresh.id = info.id;
@@ -319,8 +322,12 @@ void settle_codex(Chat& chat, double now) {
             agent.finished = false; // sent more work
         }
     }
+    double linger = chat.crew_open ? 60 * 60 : 90;
     std::erase_if(chat.agents, [&](const Agent& a) {
-        double linger = chat.crew_open ? 60 * 60 : 90;
-        return a.seen_at + 2 < now || (a.finished && now - a.finished_at > linger);
+        bool done_showing = a.finished && now - a.finished_at > linger;
+        if (done_showing) {
+            chat.retired.insert(a.id);
+        }
+        return a.seen_at + 2 < now || done_showing;
     });
 }
