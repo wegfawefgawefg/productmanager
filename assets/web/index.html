@@ -55,6 +55,13 @@
   .done { font-size: 12px; margin-top: 4px; }
   .small { font-size: 12px; }
   .empty { color: var(--dim); padding: 20px 0; }
+  /* laptop or desktop browser: tiles side by side in a grid, page scrolls as usual */
+  @media (min-width: 900px) {
+    .tiles { display: grid; gap: 8px; align-items: start;
+             grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
+    .tiles .tile { margin-bottom: 0; }
+    .tiles .shot { max-height: 38vh; object-fit: contain; background: #080808; }
+  }
 </style>
 </head>
 <body>
@@ -164,7 +171,7 @@ function chatView(c) {
   const done = c.agents.filter(a => a.finished).sort((x, y) => x.finished_ago - y.finished_ago);
   const open = c.open_url ? `<a class="btn" href="${esc(c.open_url)}">open in Claude</a>` : "";
   return `<div class="bar"><a class="btn" href="#">&lt;</a><h1>${esc(c.name)}</h1>${open}</div>
-    <div class="tile${c.act === NEEDS_YOU ? " turn" : ""}">
+    <div class="tiles"><div class="tile${c.act === NEEDS_YOU ? " turn" : ""}">
       <div class="row"><span class="dim small">${esc(c.kind)}  ${esc(c.folder)}</span>
         <span class="dim small">${live.length} working, ${done.length} done</span></div>
       ${image(c, c.pid, "")}
@@ -173,7 +180,7 @@ function chatView(c) {
       ${barcode(c, 0)}
       ${done.length ? `<div class="dim small" style="margin-top:8px">finished</div>` + done.map(doneLine).join("") : ""}
     </div>
-    ${live.map(a => agentTile(c, a)).join("")}`;
+    ${live.map(a => agentTile(c, a)).join("")}</div>`;
 }
 
 function listView() {
