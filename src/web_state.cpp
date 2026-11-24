@@ -55,7 +55,51 @@ static json tail_json(const Tail& tail, double now) {
         {"image_key", std::to_string((long)(tail.image_at * 1000))},
         {"image_name", folder_of(tail.image_path)},
         {"ticks", ticks},
+        {"shots", tail.shots.size()},
     };
+}
+
+static json ticks_json(const std::vector<Tick>& ticks, double now) {
+    json out = json::array();
+    for (const Tick& t : ticks) {
+        out.push_back({std::round((t.at - now) * 10) / 10, (int)t.act, t.failed ? 1 : 0, t.detail});
+    }
+    return out;
+}
+
+static void add_shots(json& out, const Tail& tail, const std::string& agent_id,
+                      const std::string& who, double now) {
+    for (size_t i = 0; i < tail.shots.size(); i++) {
+        const Shot& s = tail.shots[i];
+        out.push_back({
+            {"agent", agent_id},
+            {"who", who},
+            {"n", i},
+            {"at", s.at - now},
+            {"name", folder_of(s.path)},
+            {"said_before", s.said_before},
+            {"said_after", s.said_after},
+            {"before", ticks_json(s.before, now)},
+            {"after", ticks_json(s.after, now)},
+        });
+    }
+}
+
+std::string shots_json(const State& state, int chat_pid) {
+    json items = json::array();
+    for (const Chat& chat : state.chats) {
+        if (chat.pid != chat_pid) {
+            continue;
+        }
+        add_shots(items, chat.tail, "", "leader", state.now);
+        for (const Agent& agent : chat.agents) {
+            add_shots(items, agent.tail, agent.id,
+                      agent.description.empty() ? agent.id : agent.description, state.now);
+        }
+    }
+    std::stable_sort(items.begin(), items.end(),
+                     [](const json& a, const json& b) { return a["at"] > b["at"]; });
+    return json{{"shots", items}}.dump();
 }
 
 static json agent_json(const Chat& chat, const Agent& agent, double now) {
@@ -98,17 +142,24 @@ std::string state_json(const State& state) {
     return json{{"now", state.now}, {"chats", chats}}.dump();
 }
 
-std::string tile_image(const State& state, int chat_pid, const std::string& agent_id) {
+static std::string image_of(const Tail& tail, int shot) {
+    if (shot < 0) {
+        return tail.image_path;
+    }
+    return (size_t)shot < tail.shots.size() ? tail.shots[shot].path : "";
+}
+
+std::string tile_image(const State& state, int chat_pid, const std::string& agent_id, int shot) {
     for (const Chat& chat : state.chats) {
         if (chat.pid != chat_pid) {
             continue;
         }
         if (agent_id.empty()) {
-            return chat.tail.image_path;
+            return image_of(chat.tail, shot);
         }
         for (const Agent& agent : chat.agents) {
             if (agent.id == agent_id) {
-                return agent.tail.image_path;
+                return image_of(agent.tail, shot);
             }
         }
     }

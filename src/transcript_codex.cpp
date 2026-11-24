@@ -41,7 +41,9 @@ static std::string command_text(const json& command) {
 
 static void finish_tick(Tail& tail, Act act, const std::string& detail, bool failed, double when) {
     add_tick(tail, act, detail, when);
-    tail.ticks.back().failed = failed;
+    if (failed) {
+        mark_failed(tail);
+    }
     tail.error_streak = failed ? tail.error_streak + 1 : 0;
     tail.tools_used++;
 }
@@ -72,11 +74,6 @@ static void read_file_change(Tail& tail, const json& item, double when) {
     finish_tick(tail, Act::Editing, base_name(path), false, when);
 }
 
-static void show_image(Tail& tail, const std::string& path, double when) {
-    tail.image_path = path;
-    tail.image_at = when;
-}
-
 static void read_item(Tail& tail, const json& item, double when) {
     std::string type = str_field(item, "type");
     if (type == "CommandExecution") {
@@ -86,21 +83,20 @@ static void read_item(Tail& tail, const json& item, double when) {
     } else if (type == "ImageView") {
         std::string path = strip_file_url(str_field(item, "path"));
         finish_tick(tail, Act::Looking, base_name(path), false, when);
-        show_image(tail, path, when);
+        add_shot(tail, path, when);
     } else if (type == "Extension" && str_field(item, "kind") == "image_gen.generation") {
         // generated images are saved as generated_images/<thread>/<item id>.png
         std::string path = home_dir() + "/.codex/generated_images/" + tail.thread_id + "/" +
                            str_field(item, "id") + ".png";
         finish_tick(tail, Act::Publishing, "generated an image", false, when);
-        show_image(tail, path, when);
+        add_shot(tail, path, when);
         set_act(tail, Act::Looking, "generated image", when);
     } else if (type == "AgentMessage") {
         const json& content = item.contains("content") ? item["content"] : json();
         if (content.is_array() && !content.empty()) {
             std::string said = one_line(str_field(content[0], "text"));
             if (!said.empty()) {
-                tail.remark = said;
-                tail.remark_at = when;
+                note_remark(tail, said, when);
             }
         }
         set_act(tail, Act::Thinking, "writing", when);

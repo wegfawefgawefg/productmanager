@@ -23,6 +23,12 @@ bool looks_like_build(const std::string& cmd);
 void set_act(Tail& tail, Act act, const std::string& detail, double now);
 void add_tick(Tail& tail, Act act, const std::string& detail, double now);
 std::string one_line(const std::string& text);
+// the tile looked at an image: it becomes the thumbnail and joins the history
+void add_shot(Tail& tail, const std::string& path, double now);
+// it said something in plain text
+void note_remark(Tail& tail, const std::string& said, double now);
+// the newest action failed
+void mark_failed(Tail& tail);
 double parse_timestamp(const std::string& text);
 
 // one line of a Codex rollout log

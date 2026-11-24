@@ -35,11 +35,21 @@ struct Tick {
     std::string detail;
 };
 
+// one image a tile looked at, with what was going on around it
+struct Shot {
+    double at = 0;
+    std::string path;
+    std::string said_before; // its last words before looking
+    std::string said_after; // its first words after, usually about the picture
+    std::vector<Tick> before; // the actions that led up to it
+    std::vector<Tick> after; // what it did next
+};
+
 // one log file being followed, leader or agent
 struct Tail {
     Kind kind = Kind::Claude;
     std::string path;
-    uint64_t first_window = 512 * 1024; // how much of an old log is read on open
+    uint64_t first_window = 4 * 1024 * 1024; // how much of an old log is read on open
     uint64_t offset = 0;
     bool opened = false;
     std::string partial; // bytes after the last newline
@@ -64,6 +74,7 @@ struct Tail {
     int error_streak = 0; // tool calls failing in a row
     std::string model; // when the log names it (Codex does)
     std::string thread_id; // Codex: its thread, for finding generated images
+    std::vector<Shot> shots; // every image it looked at, oldest first
 };
 
 struct Agent {

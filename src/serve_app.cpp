@@ -17,6 +17,7 @@
 #include "sessions.hpp"
 #include "state.hpp"
 #include "web_state.hpp"
+#include "web_thumbs.hpp"
 
 static const int serve_port = 8651;
 
@@ -95,15 +96,32 @@ static HttpReply handle(const State& state, const HttpRequest& req) {
         reply.no_store = true;
         return reply;
     }
-    if (req.path == "/image") {
-        // only the image a tile points at right now
-        std::string path = tile_image(state, atoi(req.param("chat").c_str()), req.param("agent"));
+    if (req.path == "/shots.json") {
         HttpReply reply;
-        if (path.empty() || !read_file(path, reply.body)) {
+        reply.type = "application/json";
+        reply.body = shots_json(state, atoi(req.param("chat").c_str()));
+        reply.no_store = true;
+        return reply;
+    }
+    if (req.path == "/image" || req.path == "/thumb") {
+        // only images a tile looked at: its current one, or shot n of its history
+        std::string n = req.param("n");
+        std::string path = tile_image(state, atoi(req.param("chat").c_str()), req.param("agent"),
+                                      n.empty() ? -1 : atoi(n.c_str()));
+        HttpReply reply;
+        if (path.empty()) {
             reply.status = 404;
             return reply;
         }
-        reply.type = type_for(path);
+        if (req.path == "/thumb") {
+            reply.body = web_thumb(path);
+            reply.type = "image/jpeg";
+        } else if (read_file(path, reply.body)) {
+            reply.type = type_for(path);
+        }
+        if (reply.body.empty()) {
+            reply.status = 404;
+        }
         return reply;
     }
     HttpReply reply;

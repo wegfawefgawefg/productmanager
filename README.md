@@ -59,7 +59,16 @@ Clicking a tile in a viewer jumps to that chat.
 page on `127.0.0.1:8651`: the chats, "your turn" ones first, and for each chat
 its leader and agents as full-width tiles that refresh every second. Each
 Claude chat that has Remote Control on gets an "open" button that goes to
-`https://claude.ai/code/<session>`, where you can type to it.
+`https://claude.ai/code/<session>`, where you can type to it. On a wide
+screen, such as a laptop browser, the tiles sit side by side in a grid.
+
+"pictures" in a chat lists every image its leader and agents looked at,
+newest first, filterable by tile; tapping a tile's picture goes straight to
+that tile's list. Opening one shows it with what the agent said before and
+after looking and the actions on either side. History lives in memory: on
+start the page reads back the last 4MB of each chat log and 16MB of each agent
+log, and a finished agent's pictures go when it leaves the page an hour later.
+A file overwritten since it was looked at shows its current contents.
 
 It only listens on localhost. To reach it from a phone, publish it on your
 Tailscale tailnet over HTTPS:

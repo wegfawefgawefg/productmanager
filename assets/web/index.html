@@ -55,12 +55,31 @@
   .done { font-size: 12px; margin-top: 4px; }
   .small { font-size: 12px; }
   .empty { color: var(--dim); padding: 20px 0; }
+  .pics { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .pic { border: 1px solid var(--line); text-decoration: none; display: block; min-width: 0; }
+  .pic:active, .pic:hover { border-color: var(--text); }
+  .pic img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #080808; }
+  .pic .cap { padding: 4px 6px; font-size: 12px; }
+  .chip.on { border-color: var(--text); color: var(--text); }
+  .big { display: block; width: 100%; max-height: 70vh; object-fit: contain; background: #080808;
+         border: 1px solid var(--line); }
+  .nav { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
+  .nav .grow { flex: 1; min-width: 0; }
+  .btn.off { border-color: var(--faint); color: var(--faint); pointer-events: none; }
+  .ctx { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; }
+  .ctx li { display: flex; gap: 6px; }
+  .ctx .sq { width: 9px; height: 9px; margin-top: 4px; flex: none; }
+  .ctx .what { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctx .here { color: var(--text); font-weight: bold; }
+  .said { margin-top: 8px; color: var(--body); }
+  .label { color: var(--dim); font-size: 12px; margin-top: 12px; }
   /* laptop or desktop browser: tiles side by side in a grid, page scrolls as usual */
   @media (min-width: 900px) {
     .tiles { display: grid; gap: 8px; align-items: start;
              grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
     .tiles .tile { margin-bottom: 0; }
     .tiles .shot { max-height: 38vh; object-fit: contain; background: #080808; }
+    .pics { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   }
 </style>
 </head>
@@ -136,9 +155,10 @@ function feed(t) {
 function image(t, chatPid, agentId) {
   if (!t.image) return "";
   const src = `image?chat=${chatPid}&agent=${encodeURIComponent(agentId || "")}&k=${t.image_key}`;
-  return t.image_fresh
+  const img = t.image_fresh
     ? `<img class="shot" src="${src}" alt="${esc(t.image_name)}">`
     : `<img class="thumb" src="${src}" alt="${esc(t.image_name)}">`;
+  return `<a href="#chat=${chatPid}&pics=${encodeURIComponent(agentId || "-")}">${img}</a>`;
 }
 
 function agentTile(c, a) {
@@ -170,7 +190,9 @@ function chatView(c) {
   const live = c.agents.filter(a => !a.finished);
   const done = c.agents.filter(a => a.finished).sort((x, y) => x.finished_ago - y.finished_ago);
   const open = c.open_url ? `<a class="btn" href="${esc(c.open_url)}">open in Claude</a>` : "";
-  return `<div class="bar"><a class="btn" href="#">&lt;</a><h1>${esc(c.name)}</h1>${open}</div>
+  const shots = c.shots + c.agents.reduce((sum, a) => sum + a.shots, 0);
+  const pics = shots ? `<a class="btn" href="#chat=${c.pid}&pics=">pictures ${shots}</a>` : "";
+  return `<div class="bar"><a class="btn" href="#">&lt;</a><h1>${esc(c.name)}</h1>${pics}${open}</div>
     <div class="tiles"><div class="tile${c.act === NEEDS_YOU ? " turn" : ""}">
       <div class="row"><span class="dim small">${esc(c.kind)}  ${esc(c.folder)}</span>
         <span class="dim small">${live.length} working, ${done.length} done</span></div>
@@ -181,6 +203,78 @@ function chatView(c) {
       ${done.length ? `<div class="dim small" style="margin-top:8px">finished</div>` + done.map(doneLine).join("") : ""}
     </div>
     ${live.map(a => agentTile(c, a)).join("")}</div>`;
+}
+
+// ---- picture history: a grid per chat, filtered by tile, and one picture with its context
+
+let shots = null; // {chat, list} for the chat being looked at
+let shotsSig = "";
+
+function route() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  return {chat: q.get("chat"), pics: q.has("pics") ? q.get("pics") : null, shot: q.get("shot")};
+}
+function picKey(p) { return (p.agent || "-") + ":" + p.n; }
+function picSrc(kind, chat, p) {
+  return `${kind}?chat=${chat}&agent=${encodeURIComponent(p.agent)}&n=${p.n}`;
+}
+function filtered(who) {
+  return shots.list.filter(p => !who || (p.agent || "-") === who);
+}
+
+function ctxRows(ticks, here) {
+  return ticks.map((k, i) => {
+    const color = ACTS[k[1]] ? ACTS[k[1]][1] : "#666";
+    const fail = k[2] ? ' style="outline:2px solid var(--fail)"' : "";
+    const cls = here && i === ticks.length - 1 ? "what here" : "what";
+    return `<li><span class="sq" style="background:${color}"${fail}></span>` +
+      `<span class="${cls}">${esc(ACTS[k[1]] ? ACTS[k[1]][0] : "")}  ${esc(k[3])}</span>` +
+      `<span class="dim">${ago(k[0])}</span></li>`;
+  }).join("");
+}
+
+function picsView(c, who) {
+  const list = filtered(who);
+  const counts = {};
+  shots.list.forEach(p => { counts[p.agent || "-"] = (counts[p.agent || "-"] || 0) + 1; });
+  const names = {"-": "leader"};
+  shots.list.forEach(p => { if (p.agent) names[p.agent] = p.who; });
+  const chip = (key, label, n) =>
+    `<a class="chip${(who || "") === key ? " on" : ""}" href="#chat=${c.pid}&pics=${encodeURIComponent(key)}">${esc(label)} ${n}</a>`;
+  const chips = chip("", "all", shots.list.length) +
+    Object.keys(counts).map(k => chip(k, names[k], counts[k])).join("");
+  const cells = list.map(p => `<a class="pic" href="#chat=${c.pid}&pics=${encodeURIComponent(who || "")}&shot=${encodeURIComponent(picKey(p))}">
+      <img loading="lazy" src="${picSrc("thumb", c.pid, p)}" alt="${esc(p.name)}">
+      <div class="cap"><div class="row"><span class="ellip">${esc(p.who)}</span><span class="dim">${ago(p.at)}</span></div>
+      <div class="dim ellip">${esc(p.name)}</div></div></a>`).join("");
+  return `<div class="bar"><a class="btn" href="#chat=${c.pid}">&lt;</a><h1>${esc(c.name)} pictures</h1></div>
+    <div class="chips" style="margin:0 0 8px">${chips}</div>
+    ${cells ? `<div class="pics">${cells}</div>` : '<div class="empty">no pictures yet</div>'}`;
+}
+
+function shotView(c, who, key) {
+  const list = filtered(who);
+  const i = list.findIndex(p => picKey(p) === key);
+  if (i < 0) return `<div class="bar"><a class="btn" href="#chat=${c.pid}&pics=${encodeURIComponent(who || "")}">&lt;</a><h1>that picture is gone</h1></div>`;
+  const p = list[i];
+  const link = q => q ? `#chat=${c.pid}&pics=${encodeURIComponent(who || "")}&shot=${encodeURIComponent(picKey(q))}` : "";
+  const newer = link(list[i - 1]), older = link(list[i + 1]);
+  return `<div class="bar"><a class="btn" href="#chat=${c.pid}&pics=${encodeURIComponent(who || "")}">&lt;</a><h1>${esc(p.who)}</h1></div>
+    <a href="${picSrc("image", c.pid, p)}" target="_blank"><img class="big" src="${picSrc("image", c.pid, p)}" alt="${esc(p.name)}"></a>
+    <div class="nav"><a class="btn${older ? "" : " off"}" href="${older}">&lt; older</a>
+      <span class="grow ellip dim small" style="text-align:center">${esc(p.name)}  ${ago(p.at)} ago  ${list.length - i}/${list.length}</span>
+      <a class="btn${newer ? "" : " off"}" href="${newer}">newer &gt;</a></div>
+    ${p.said_before ? `<div class="label">it said before</div><div class="said">${esc(p.said_before)}</div>` : ""}
+    ${p.before.length ? `<div class="label">leading up</div><ul class="ctx">${ctxRows(p.before, true)}</ul>` : ""}
+    ${p.after.length ? `<div class="label">then</div><ul class="ctx">${ctxRows(p.after, false)}</ul>` : ""}
+    ${p.said_after ? `<div class="label">it said after</div><div class="said">${esc(p.said_after)}</div>` : ""}`;
+}
+
+async function loadShots(chat) {
+  try {
+    const r = await fetch(`shots.json?chat=${chat}`, {cache: "no-store"});
+    shots = {chat, list: (await r.json()).shots};
+  } catch (e) {}
 }
 
 function listView() {
@@ -210,9 +304,23 @@ function render() {
   const app = document.getElementById("app");
   if (!data) return;
   app.className = "";
-  const m = location.hash.match(/chat=(-?\d+)/);
-  const chat = m && data.chats.find(c => String(c.pid) === m[1]);
-  app.innerHTML = chat ? chatView(chat) : m ? '<div class="bar"><a class="btn" href="#">&lt;</a><h1>that chat has closed</h1></div>' : listView();
+  const r = route();
+  const chat = r.chat && data.chats.find(c => String(c.pid) === r.chat);
+  if (chat && r.pics !== null) {
+    if (!shots || shots.chat !== r.chat) {
+      app.innerHTML = '<div class="empty">loading...</div>';
+      return;
+    }
+    // pictures only redraw when something changed, so the grid keeps its scroll and images
+    const sig = location.hash + "|" + shots.list.map(p => picKey(p) + p.after.length + p.said_after.length).join(",");
+    if (sig === shotsSig) return;
+    shotsSig = sig;
+    app.innerHTML = r.shot ? shotView(chat, r.pics, r.shot) : picsView(chat, r.pics);
+    document.title = chat.name + " pictures - pm";
+    return;
+  }
+  shotsSig = "";
+  app.innerHTML = chat ? chatView(chat) : r.chat ? '<div class="bar"><a class="btn" href="#">&lt;</a><h1>that chat has closed</h1></div>' : listView();
   document.title = chat ? chat.name + " - pm" : "productmanager";
 }
 
@@ -220,13 +328,35 @@ async function refresh() {
   try {
     const r = await fetch("state.json", {cache: "no-store"});
     data = await r.json();
+    const q = route();
+    if (q.chat && q.pics !== null) await loadShots(q.chat);
     render();
   } catch (e) {
     document.getElementById("app").innerHTML = '<div class="empty">no connection to the desktop</div>';
   }
 }
 
-window.addEventListener("hashchange", render);
+// going from the grid to a picture and back returns to the same spot in the grid
+let lastRoute = route(), gridScroll = 0;
+window.addEventListener("hashchange", () => {
+  const q = route();
+  const fromGrid = lastRoute.pics !== null && !lastRoute.shot;
+  const backToGrid = q.pics !== null && !q.shot && lastRoute.shot && lastRoute.chat === q.chat && lastRoute.pics === q.pics;
+  if (fromGrid && q.shot) gridScroll = window.scrollY;
+  if (q.pics !== null && (!shots || shots.chat !== q.chat)) refresh();
+  render();
+  window.scrollTo(0, backToGrid ? gridScroll : 0);
+  lastRoute = q;
+});
+// laptop: arrow keys step through pictures, escape goes back
+document.addEventListener("keydown", e => {
+  const q = route();
+  if (q.pics === null) return;
+  const pick = sel => { const a = document.querySelector(sel); if (a && a.getAttribute("href")) location.hash = a.getAttribute("href"); };
+  if (q.shot && e.key === "ArrowLeft") pick(".nav .btn:first-child");
+  if (q.shot && e.key === "ArrowRight") pick(".nav .btn:last-child");
+  if (e.key === "Escape") pick(".bar .btn");
+});
 refresh();
 setInterval(() => { if (!document.hidden) refresh(); }, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });

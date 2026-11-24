@@ -14,6 +14,9 @@ namespace fs = std::filesystem;
 
 static const size_t max_ticks = 4000;
 static const size_t max_remark = 400;
+// image history per tile, and the actions kept on each side of an image
+static const size_t max_shots = 200;
+static const size_t shot_context = 3;
 
 const char* act_name(Act act) {
     switch (act) {
@@ -215,6 +218,47 @@ void add_tick(Tail& tail, Act act, const std::string& detail, double now) {
         tail.ticks.erase(tail.ticks.begin(), tail.ticks.begin() + max_ticks / 4);
     }
     tail.ticks.push_back({now, act, false, detail});
+    if (!tail.shots.empty() && tail.shots.back().after.size() < shot_context) {
+        tail.shots.back().after.push_back(tail.ticks.back());
+    }
+}
+
+void mark_failed(Tail& tail) {
+    if (tail.ticks.empty()) {
+        return;
+    }
+    tail.ticks.back().failed = true;
+    if (!tail.shots.empty() && !tail.shots.back().after.empty()) {
+        Tick& last = tail.shots.back().after.back();
+        if (last.at == tail.ticks.back().at && last.detail == tail.ticks.back().detail) {
+            last.failed = true;
+        }
+    }
+}
+
+void add_shot(Tail& tail, const std::string& path, double now) {
+    tail.image_path = path;
+    tail.image_at = now;
+    if (tail.shots.size() >= max_shots) {
+        tail.shots.erase(tail.shots.begin(), tail.shots.begin() + max_shots / 4);
+    }
+    Shot shot;
+    shot.at = now;
+    shot.path = path;
+    shot.said_before = tail.remark;
+    // the look itself plus what led up to it
+    size_t first = tail.ticks.size() > shot_context + 1 ? tail.ticks.size() - shot_context - 1 : 0;
+    shot.before.assign(tail.ticks.begin() + first, tail.ticks.end());
+    tail.shots.push_back(shot);
+}
+
+void note_remark(Tail& tail, const std::string& said, double now) {
+    tail.remark = said;
+    tail.remark_at = now;
+    // the first words after a run of images are about them
+    for (auto it = tail.shots.rbegin(); it != tail.shots.rend() && it->said_after.empty(); ++it) {
+        it->said_after = said;
+    }
 }
 
 // squash whitespace so a remark reads as one line of prose
@@ -269,15 +313,13 @@ static void read_assistant(Tail& tail, const json& msg, double now) {
             add_tick(tail, act, detail, now);
             tail.tools_used++;
             if (!image.empty()) {
-                tail.image_path = image;
-                tail.image_at = now;
+                add_shot(tail, image, now);
             }
         } else if (type == "text") {
             set_act(tail, Act::Thinking, "writing", now);
             std::string said = one_line(str_field(block, "text"));
             if (!said.empty()) {
-                tail.remark = said;
-                tail.remark_at = now;
+                note_remark(tail, said, now);
             }
         } else if (type == "thinking") {
             set_act(tail, Act::Thinking, "", now);
@@ -301,8 +343,8 @@ static void read_user(Tail& tail, const json& msg, double now) {
         if (str_field(block, "type") == "tool_result") {
             bool failed = bool_field(block, "is_error", false);
             tail.error_streak = failed ? tail.error_streak + 1 : 0;
-            if (failed && !tail.ticks.empty()) {
-                tail.ticks.back().failed = true;
+            if (failed) {
+                mark_failed(tail);
             }
             set_act(tail, Act::Thinking, "", now);
             return;

@@ -26,7 +26,7 @@ endif()
 
 add_executable(productmanager
     src/main.cpp src/paths.cpp src/strip_app.cpp src/view_app.cpp src/views.cpp src/wm.cpp
-    src/serve_app.cpp src/http_server.cpp src/web_state.cpp
+    src/serve_app.cpp src/http_server.cpp src/web_state.cpp src/web_thumbs.cpp
     src/sessions.cpp src/transcript.cpp src/transcript_codex.cpp src/codex_sessions.cpp src/focus.cpp
     src/tiles.cpp src/big_view.cpp src/crew_card.cpp src/tile_layout.cpp
     src/icons.cpp src/shapes.cpp src/text.cpp src/thumbs.cpp src/capture.cpp)
